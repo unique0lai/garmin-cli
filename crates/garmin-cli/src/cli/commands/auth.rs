@@ -38,6 +38,7 @@ pub async fn login(email: Option<String>, profile: Option<String>) -> Result<()>
 
     // Perform login
     let mut sso_client = SsoClient::new()?;
+    println!("Domain: {}", sso_client.domain());
     let (oauth1, oauth2) = sso_client
         .login(&email, &password, Some(prompt_mfa))
         .await?;
@@ -47,6 +48,7 @@ pub async fn login(email: Option<String>, profile: Option<String>) -> Result<()>
 
     println!("Successfully logged in!");
     println!("Profile: {}", store.profile());
+    println!("Domain: {}", oauth1.domain);
 
     Ok(())
 }
@@ -82,6 +84,7 @@ pub async fn status(profile: Option<String>) -> Result<()> {
         Some((oauth1, oauth2)) => {
             println!("Status: Logged in");
             println!("Profile: {}", store.profile());
+            println!("Domain: {}", oauth1.domain);
 
             if oauth2.is_expired() {
                 println!("Access Token: Expired (will refresh on next request)");
@@ -124,7 +127,7 @@ pub async fn refresh_token(store: &CredentialStore) -> Result<(OAuth1Token, OAut
     }
 
     println!("Refreshing access token...");
-    let sso_client = SsoClient::new()?;
+    let sso_client = SsoClient::with_domain(oauth1.domain.clone())?;
     let new_oauth2 = sso_client.refresh_oauth2(&oauth1).await?;
 
     store.save_oauth2(&new_oauth2)?;

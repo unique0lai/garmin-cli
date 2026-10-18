@@ -35,6 +35,12 @@ impl OAuth1Token {
         self.mfa_expiration_timestamp = expiration;
         self
     }
+
+    /// Record which Garmin domain (region) this token was issued for.
+    pub fn with_domain(mut self, domain: String) -> Self {
+        self.domain = domain;
+        self
+    }
 }
 
 /// OAuth2 Bearer token for API requests.
