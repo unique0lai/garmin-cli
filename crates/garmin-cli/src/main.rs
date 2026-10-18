@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 use garmin_cli::cli::commands;
+use garmin_cli::client::{resolve_domain, GLOBAL_DOMAIN};
 
 #[derive(Parser)]
 #[command(name = "garmin")]
@@ -11,6 +12,10 @@ struct Cli {
     /// Profile to use
     #[arg(short, long, global = true, env = "GARMIN_PROFILE")]
     profile: Option<String>,
+
+    /// Garmin region: garmin.com (international) or garmin.cn (mainland China)
+    #[arg(long, global = true, value_name = "DOMAIN", env = "GARMIN_DOMAIN")]
+    domain: Option<String>,
 }
 
 #[derive(Subcommand)]
@@ -381,6 +386,12 @@ enum SyncCommands {
 async fn main() -> garmin_cli::Result<()> {
     let cli = Cli::parse();
 
+    // Resolve the Garmin region before dispatching. SsoClient and
+    // GarminClient read GARMIN_DOMAIN when they are constructed, so the
+    // selected region must be exported here.
+    let domain = resolve_effective_domain(cli.domain.as_deref(), cli.profile.as_deref())?;
+    std::env::set_var("GARMIN_DOMAIN", &domain);
+
     let result = match cli.command {
         Commands::Auth { command } => match command {
             AuthCommands::Login { email } => commands::login(email, cli.profile).await,
@@ -533,9 +544,52 @@ async fn main() -> garmin_cli::Result<()> {
     Ok(())
 }
 
+/// Resolve which Garmin region to use.
+///
+/// Priority:
+/// 1. explicit `--domain` (or the `GARMIN_DOMAIN` environment variable, which
+///    clap already folds into the same argument)
+/// 2. the region recorded in already-saved credentials, so users who logged
+///    in on garmin.cn keep working without passing `--domain` every time
+/// 3. international (`garmin.com`)
+fn resolve_effective_domain(
+    cli_domain: Option<&str>,
+    profile: Option<&str>,
+) -> garmin_cli::Result<String> {
+    if let Some(domain) = cli_domain.filter(|d| !d.trim().is_empty()) {
+        return resolve_domain(domain);
+    }
+
+    if let Ok(store) = garmin_cli::config::CredentialStore::new(profile.map(str::to_owned)) {
+        if let Ok(Some((oauth1, _))) = store.load_tokens() {
+            if let Ok(domain) = resolve_domain(&oauth1.domain) {
+                return Ok(domain);
+            }
+        }
+    }
+
+    Ok(GLOBAL_DOMAIN.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn resolves_known_regions() {
+        assert_eq!(resolve_domain("com").unwrap(), "garmin.com");
+        assert_eq!(resolve_domain("garmin.com").unwrap(), "garmin.com");
+        assert_eq!(resolve_domain("cn").unwrap(), "garmin.cn");
+        assert_eq!(resolve_domain("china").unwrap(), "garmin.cn");
+        assert_eq!(resolve_domain("garmin.cn").unwrap(), "garmin.cn");
+        assert!(resolve_domain("example.org").is_err());
+    }
+
+    #[test]
+    fn accepts_domain_flag_before_or_after_subcommand() {
+        assert!(Cli::try_parse_from(["garmin", "--domain", "cn", "auth", "status"]).is_ok());
+        assert!(Cli::try_parse_from(["garmin", "auth", "status", "--domain", "cn"]).is_ok());
+    }
 
     #[test]
     fn rejects_removed_format_flag() {

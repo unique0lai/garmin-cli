@@ -11,6 +11,7 @@ use std::io::Write;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+use crate::client::current_domain;
 use crate::client::tokens::OAuth2Token;
 use crate::error::{GarminError, Result};
 
@@ -69,13 +70,16 @@ impl RequestLogger {
 
 impl GarminClient {
     /// Create a new API client for Garmin Connect.
+    ///
+    /// The Connect API host follows the region selected via `GARMIN_DOMAIN`
+    /// (`garmin.com` or `garmin.cn`).
     pub fn new() -> Self {
         Self {
             client: Client::builder()
                 .timeout(std::time::Duration::from_secs(30))
                 .build()
                 .expect("Failed to create HTTP client"),
-            base_url: "https://connectapi.garmin.com".to_string(),
+            base_url: format!("https://connectapi.{}", current_domain()),
             logger: None,
         }
     }
@@ -384,16 +388,23 @@ mod tests {
     #[test]
     fn test_build_url() {
         let client = GarminClient::new();
+        let domain = current_domain();
         assert_eq!(
             client.build_url("/activity-service/activity/123"),
-            "https://connectapi.garmin.com/activity-service/activity/123"
+            format!(
+                "https://connectapi.{}/activity-service/activity/123",
+                domain
+            )
         );
     }
 
     #[test]
     fn test_client_creation() {
         let client = GarminClient::new();
-        assert_eq!(client.base_url, "https://connectapi.garmin.com");
+        assert_eq!(
+            client.base_url,
+            format!("https://connectapi.{}", current_domain())
+        );
     }
 
     #[tokio::test]

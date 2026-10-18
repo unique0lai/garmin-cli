@@ -27,6 +27,25 @@ cargo install garmin-cli
 
 Pre-built binaries for macOS and Linux (amd64/arm64) are available on the [releases page](https://github.com/vicentereig/garmin-cli/releases).
 
+## Region Selection (China / International)
+
+Garmin mainland China and Garmin International use separate account systems and
+different domains. The CLI supports both:
+
+```bash
+# Mainland China account (garmin.cn)
+garmin --domain cn auth login
+
+# International account (garmin.com, default)
+garmin --domain com auth login
+```
+
+`--domain` accepts `com`/`global`/`international`/`garmin.com` and
+`cn`/`china`/`garmin.cn`, or set `GARMIN_DOMAIN=cn` in your environment. The
+selected region is saved with the credentials and reused for token refreshes,
+so later commands don't need `--domain` again. International remains the
+default, so existing setups keep working unchanged.
+
 ## Authentication
 
 ```bash
